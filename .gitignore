@@ -1,0 +1,10 @@
+*.log
+*.tmp
+.bundle
+.DS_Store
+vendor/*
+config/config.rb
+config/override.rb
+tmp/*
+test/data/dump/*
+Procfile

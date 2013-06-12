@@ -1,0 +1,11 @@
+$config = {
+	:app => {
+		:shorturl_base => '',
+		:shortcode_length => 5
+	},
+	:redis => {
+		:url => "",
+		:namespace => "shorturl"
+	}
+}
+
