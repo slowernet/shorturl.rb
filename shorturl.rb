@@ -12,15 +12,34 @@ require 'json'
 # shorturl:a => [ [created_at_ms, url], ... ] (zset of all links shortened, scored by created_at)
 
 class Shorturl
-	def self.shortcode
-		(1..$config[:app][:shortcode_length]).map{ ['a'..'z', 0..9].map(&:to_a).flatten.sample }.join
+	class Shortcode
+		class InvalidError < RuntimeError; end
+		
+		def self.validate(shortcode)
+			shortcode =~ $config[:app][:shortcode_format]
+		end
+		
+		def self.generate(namespace)
+			begin 
+				shortcode = (1..$config[:app][:shortcode_length]).map { ['a'..'z', 0..9].map(&:to_a).flatten.sample }.join
+			end until !(namespace[shortcode].exists)
+			shortcode
+		end
 	end
+	
 	
 	def self.absolutize(shortcode)
 		URI.join("#{$config[:app][:shorturl_base]}", shortcode).to_s
 	end
+	
+	def self.save(url, shortcode)
+		$redis.redis.multi
+		$redis['a'].zadd((Time.now.to_f * 1000).to_i, url)
+		$redis['c'][shortcode].hmset('url', url, 'count', 0)
+		$redis['u'][url].set(shortcode)
+		$redis.redis.exec
+	end
 end
-
 
 configure do
 	# disable :protection
@@ -33,8 +52,8 @@ get '/' do
 		{ 
 			:url => url, 
 			:shorturl => Shorturl.absolutize(shortcode), 
-			:shortcode => shortcode, 
 			:count => $redis['c'][shortcode].hget('count').to_i,
+			:shortcode => shortcode, 
 			:created_at => Time.at(created_at/1000.0).utc
 		}
 	end
@@ -45,14 +64,21 @@ get '/' do
 end
 
 post '/' do
-	halt 400 unless params[:url] =~ URI::regexp
+	halt 400, 'Malformed URL' unless params[:url] =~ URI::regexp
 	
-	unless shortcode = $redis['u'][params[:url]].get
-		shortcode = params[:shortcode].empty? ? (begin c = Shorturl.shortcode; end until !($redis['c'][c].exists); c) : params[:shortcode]
-		$redis['a'].zadd((Time.now.to_f * 1000).to_i, params[:url])
-		$redis['c'][shortcode].hmset('url', params[:url], 'count', 0)
-		$redis['u'][params[:url]].set(shortcode)
+	if !params[:shortcode].nil? && !params[:shortcode].empty?	# desired shortcode passed in?
+		halt 400, "Invalid shortcode (#{$config[:app][:shortcode_format].inspect})" unless Shorturl::Shortcode.validate(params[:shortcode])
+		if $redis['c'][params[:shortcode]].exists && params[:url] != $redis['c'][params[:shortcode]].hget('url')	# passed shortcode in use elsewhere?
+			halt 400, 'Shortcode in use'
+		else
+			shortcode = params[:shortcode]
+			Shorturl.save(params[:url], shortcode)
+		end
+	elsif !(shortcode = $redis['u'][params[:url]].get)	# url not yet shortened
+		shortcode = Shorturl::Shortcode.generate($redis['c'])
+		Shorturl.save(params[:url], shortcode)
 	end
+
 	url = Shorturl.absolutize(shortcode)
 	
 	respond_to do |f|
