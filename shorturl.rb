@@ -7,9 +7,9 @@ require 'json'
 %w(./config/config.rb).each { |path| load path if Pathname.new(path).exist? }
 
 # schema
-# shorturl:u:<url> => shortcode (string)
+# shorturl:u => { :url => :shortcode } (hash) (dictionary of all shortened URLs)
 # shorturl:c:<shortcode> =>  { :url, :count } (hash)
-# shorturl:a => [ [created_at_ms, url], ... ] (zset of all links shortened, scored by created_at)
+# shorturl:a => [ [created_at_ms, url], ... ] (zset of all urls, scored by created_at_ms)
 
 class Shorturl
 	class Shortcode
@@ -34,9 +34,9 @@ class Shorturl
 	
 	def self.save(url, shortcode)
 		$redis.redis.multi
-		$redis['a'].zadd((Time.now.to_f * 1000).to_i, url)
+		$redis['a'].zadd((Time.now.to_f * 1000).to_i, shortcode)
 		$redis['c'][shortcode].hmset('url', url, 'count', 0)
-		$redis['u'][url].set(shortcode)
+		$redis['u'].hset(url, shortcode)
 		$redis.redis.exec
 	end
 end
@@ -47,12 +47,12 @@ configure do
 end
 
 get '/' do
-	links = $redis['a'].zrevrangebyscore("+inf", "-inf", :with_scores => true).map do |url, created_at|
-		shortcode = $redis['u'][url].get
+	links = $redis['a'].zrevrangebyscore("+inf", "-inf", :with_scores => true).map do |shortcode, created_at|
+		c = $redis['c'][shortcode].hgetall
 		{ 
-			:url => url, 
+			:url => c['url'],
 			:shorturl => Shorturl.absolutize(shortcode), 
-			:count => $redis['c'][shortcode].hget('count').to_i,
+			:count => c['count'].to_i,
 			:shortcode => shortcode, 
 			:created_at => Time.at(created_at/1000.0).utc
 		}
@@ -74,7 +74,7 @@ post '/' do
 			shortcode = params[:shortcode]
 			Shorturl.save(params[:url], shortcode)
 		end
-	elsif !(shortcode = $redis['u'][params[:url]].get)	# url not yet shortened
+	elsif !(shortcode = $redis['u'].hget(params[:url]))	# url not yet shortened
 		shortcode = Shorturl::Shortcode.generate($redis['c'])
 		Shorturl.save(params[:url], shortcode)
 	end
