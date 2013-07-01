@@ -1,11 +1,11 @@
 $config = {
 	:app => {
 		:shorturl_base => '',
-		:shortcode_length => 5
+		:shortcode_length => 5,
+		:shortcode_format => /[a-zA-Z0-9\-\_]{5,}/
 	},
 	:redis => {
-		:url => "",
-		:namespace => "shorturl"
+		:url => 'redis://127.0.0.1:6379/0',
+		:namespace => ''
 	}
 }
-

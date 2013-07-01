@@ -42,6 +42,8 @@ class Shorturl
 end
 
 configure do
+	use Rack::JSONP
+
 	# disable :protection
 	$redis = Nest.new($config[:redis][:namespace], Redis.new(:url => $config[:redis][:url]))
 end
@@ -90,7 +92,7 @@ end
 # "stats"
 get %r{/([a-z0-9\-]+)\+} do |shortcode|
 	respond_to do |f|
-		f.json { $redis['c'][shortcode].hget('count').to_json }
+		f.json { { shortcode => $redis['c'][shortcode].hget('count') }.to_json }
 	end
 end
 

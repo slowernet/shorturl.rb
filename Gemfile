@@ -2,6 +2,7 @@ source 'http://rubygems.org'
 
 gem 'sinatra'
 gem 'sinatra-contrib'
+gem 'rack-contrib'
 gem 'hiredis'
 gem 'redis'
 gem 'nest'

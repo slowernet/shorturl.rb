@@ -9,6 +9,8 @@ GEM
     nest (1.1.2)
       redis
     rack (1.5.2)
+    rack-contrib (1.1.0)
+      rack (>= 0.9.1)
     rack-protection (1.5.0)
       rack
     rack-test (0.6.2)
@@ -40,6 +42,7 @@ DEPENDENCIES
   hiredis
   json
   nest
+  rack-contrib
   redis
   shotgun
   sinatra
